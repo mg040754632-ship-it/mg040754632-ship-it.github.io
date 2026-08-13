@@ -7,7 +7,8 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>穿搭工作台</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=3" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>👗</text></svg>" />
+  <link rel="stylesheet" href="assets/css/style.css?v=4" />
 </head>
 <body>
   <!-- 顶部标题栏 -->
@@ -48,6 +49,16 @@
       </div>
     </section>
 
+    <!-- ========== 季节详情页（春/夏/秋/冬 共用，按 id 区分） ========== -->
+    <section id="page-season" class="page">
+      <div class="season-detail-head">
+        <button class="season-back" id="seasonDetailBack">← 返回</button>
+        <span class="season-detail-title" id="seasonDetailTitle">🌸 春</span>
+      </div>
+      <div class="section-label">该季节的穿搭方案</div>
+      <div class="season-detail-grid" id="seasonDetailGrid"></div>
+    </section>
+
     <!-- ========== 个人主页 ========== -->
     <section id="page-profile" class="page">
       <div class="profile-grid">
@@ -55,7 +66,7 @@
         <button class="profile-card" id="openUpload">
           <div class="profile-card-icon">⬆️</div>
           <div class="profile-card-title">上传衣物</div>
-          <div class="profile-card-desc">从相册选图，抠衣换白底，归入分类</div>
+          <div class="profile-card-desc">从相册选图，归入分类，加入服饰库</div>
         </button>
 
         <!-- 搭配衣物 -->
@@ -122,6 +133,13 @@
     <div class="match-canvas-wrap">
       <div class="match-canvas" id="matchCanvas"></div>
     </div>
+    <!-- 画布缩放控件 -->
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="zoomOut" title="缩小">－</button>
+      <span class="zoom-label" id="zoomLabel">100%</span>
+      <button class="zoom-btn" id="zoomIn" title="放大">＋</button>
+      <button class="zoom-btn zoom-reset" id="zoomReset" title="复位">⤢</button>
+    </div>
 
     <!-- 下三分之二：可拖动的衣物 -->
     <div class="match-tray" id="matchTray"></div>
@@ -151,7 +169,7 @@
     </aside>
   </div>
 
-  <script src="assets/js/data.js?v=3"></script>
-  <script src="assets/js/app.js?v=3"></script>
+  <script src="assets/js/data.js?v=4"></script>
+  <script src="assets/js/app.js?v=4"></script>
 </body>
 </html>

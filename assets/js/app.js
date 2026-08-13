@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const { CATEGORIES, SEASONS, ACCESSORY_KEYS, load, save, refreshFavorite } = window.OSData;
+  const { CATEGORIES, SEASONS, load, save, refreshFavorite } = window.OSData;
   let state = load();
 
   const $ = (s, r = document) => r.querySelector(s);
@@ -57,6 +57,11 @@
     }
     else if (last === 'season') { $('#seasonPick').hidden = true; }
     else if (last === 'category') { $('#categoryPanel').hidden = true; }
+    else if (last === 'season-detail') {
+      // 顶部返回键：回到穿搭方案页
+      $$('.nav-btn').forEach(b => b.classList.toggle('is-active', b.dataset.target === 'page-plans'));
+      $$('.page').forEach(p => p.classList.toggle('is-active', p.id === 'page-plans'));
+    }
     updateBackBtn();
   }
 
@@ -75,31 +80,60 @@
         fav.appendChild(el);
       });
     }
-    // 四季点击 -> 查看该季
+    // 四季点击 -> 进入该季详情页
     $$('.season-square').forEach(sq => {
       sq.addEventListener('click', () => openSeason(sq.dataset.season));
     });
   }
 
+  const SEASON_META = {
+    spring: { emoji: '🌸', name: '春' },
+    summer: { emoji: '☀️', name: '夏' },
+    autumn: { emoji: '🍂', name: '秋' },
+    winter: { emoji: '❄️', name: '冬' }
+  };
+
+  // 进入季节详情页（独立的展示页）
   function openSeason(season) {
+    const meta = SEASON_META[season];
+    $('#seasonDetailTitle').textContent = `${meta.emoji} ${meta.name}`;
+    $('#seasonDetailTitle').dataset.season = season;
+    renderSeasonDetail(season);
+    // 切换到季节详情页
+    $$('.nav-btn').forEach(b => b.classList.remove('is-active'));
+    $$('.page').forEach(p => p.classList.toggle('is-active', p.id === 'page-season'));
+    pushHistory('season-detail');
+  }
+
+  // 渲染某季的搭配方案列表（持久化数据）
+  function renderSeasonDetail(season) {
+    const grid = $('#seasonDetailGrid');
+    if (!grid) return;
     const items = state.seasons[season] || [];
-    const names = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
-    if (!items.length) { toast(`${names[season]}季还没有穿搭，去搭配吧`); return; }
-    // 简单展示：把该季第一套穿搭铺到最常穿区域
-    const fav = $('#favoriteOutfit');
-    fav.innerHTML = '';
+    grid.innerHTML = '';
+    if (!items.length) {
+      grid.innerHTML = '<div class="season-empty">该季节还没有穿搭方案，去「个人主页」搭配并保存吧～</div>';
+      return;
+    }
     items.forEach(outfit => {
-      const wrap = document.createElement('div');
-      wrap.className = 'feature-item';
-      wrap.style.width = 'calc(50% - 5px)';
-      const imgs = outfit.items.map(u => `<img src="${u}" style="width:48%;margin:1%">`).join('');
-      wrap.innerHTML = imgs;
-      fav.appendChild(wrap);
+      const card = document.createElement('div');
+      card.className = 'outfit-card';
+      const imgs = outfit.items.map(u => `<img src="${u}" alt="">`).join('');
+      card.innerHTML = `
+        <div class="outfit-imgs">${imgs}</div>
+        <button class="outfit-del" data-id="${outfit.id}" title="删除该方案">✕</button>
+      `;
+      card.querySelector('.outfit-del').addEventListener('click', e => {
+        e.stopPropagation();
+        state.seasons[season] = state.seasons[season].filter(o => o.id !== outfit.id);
+        save(state);
+        refreshFavorite(state);
+        renderSeasonDetail(season);
+        renderPlans();
+        toast('已删除该穿搭方案');
+      });
+      grid.appendChild(card);
     });
-    // 切到穿搭方案页
-    $$('.nav-btn').forEach(b => b.classList.toggle('is-active', b.dataset.target === 'page-plans'));
-    $$('.page').forEach(p => p.classList.toggle('is-active', p.id === 'page-plans'));
-    toast(`查看${names[season]}季穿搭`);
   }
 
   /* ---------- 上传衣物 ---------- */
@@ -122,11 +156,9 @@
       if (!file) return;
       const reader = new FileReader();
       reader.onload = ev => {
-        // 抠图换白底（近似：去除近似纯白/纯透明边缘 + 居中）
-        removeBgToWhite(ev.target.result, dataUrl => {
-          currentDataUrl = dataUrl;
-          preview.innerHTML = `<img src="${dataUrl}">`;
-        });
+        // 直接使用原图，不再做去背景/换白底处理
+        currentDataUrl = ev.target.result;
+        preview.innerHTML = `<img src="${currentDataUrl}">`;
       };
       reader.readAsDataURL(file);
     });
@@ -152,40 +184,43 @@
     });
   }
 
-  // 前端近似去背景：把接近白色的像素变透明，导出为白底 PNG
-  function removeBgToWhite(src, cb) {
-    const img = new Image();
-    img.onload = () => {
-      const maxW = 600;
-      const scale = Math.min(1, maxW / img.width);
-      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-      const cv = document.createElement('canvas');
-      cv.width = w; cv.height = h;
-      const ctx = cv.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      try {
-        const imgData = ctx.getImageData(0, 0, w, h);
-        const d = imgData.data;
-        for (let i = 0; i < d.length; i += 4) {
-          const r = d[i], g = d[i + 1], b = d[i + 2];
-          // 接近白色 -> 透明（实现"抠出衣服 + 白底"的近似效果）
-          if (r > 235 && g > 235 && b > 235) { d[i + 3] = 0; }
-        }
-        ctx.putImageData(imgData, 0, 0);
-      } catch (e) { /* 跨域图片可能失败，直接返回原图 */ }
-      cb(cv.toDataURL('image/png'));
-    };
-    img.onerror = () => cb(src);
-    img.src = src;
-  }
+  // 前端去背景函数已移除（需求：不再对上传衣物做换白底处理）
 
   /* ---------- 搭配衣物 ---------- */
-  let matchState = { activeCat: null };
+  let matchState = { activeCat: null, currentSeason: null };
+
+  // 把当前画布上的搭配保存到指定季节（持久化到 localStorage）
+  function saveCurrentMatch(season) {
+    const items = $$('.placed', $('#matchCanvas')).map(p => p.dataset.url);
+    if (!items.length) { toast('先把衣物拖到上方白底'); return false; }
+    state.seasons[season] = state.seasons[season] || [];
+    state.seasons[season].push({ id: 'o' + Date.now(), items });
+    save(state);                       // 写入 localStorage，刷新/重进不丢失
+    refreshFavorite(state);
+    renderSeasonDetail(season);        // 同步刷新季节详情页
+    return true;
+  }
+
+  function closeMatch() {
+    const view = $('#matchView');
+    view.hidden = true;
+    $('#categoryPanel').hidden = true;
+    $('#seasonPick').hidden = true;
+    matchState.currentSeason = null;
+    // 清掉 match 及其子层历史
+    while (history.length && history[history.length-1] !== 'match') history.pop();
+    if (history[history.length-1] === 'match') history.pop();
+    updateBackBtn();
+    refreshFavorite(state);
+    renderPlans();
+  }
 
   function initMatch() {
     const view = $('#matchView');
     $('#openMatch').addEventListener('click', () => {
       view.hidden = false;
+      matchState.currentSeason = null;
+      resetZoom();
       renderCategoryList();
       renderTray();
       clearCanvas();
@@ -194,15 +229,19 @@
     // 返回键：退出搭配页
     $('#matchBack').addEventListener('click', () => { if (history[history.length-1]==='match') goBack(); });
     $('#matchDone').addEventListener('click', () => {
-      view.hidden = true;
-      $('#categoryPanel').hidden = true;
-      $('#seasonPick').hidden = true;
-      // 清掉 match 及其子层历史
-      while (history.length && history[history.length-1] !== 'match') history.pop();
-      if (history[history.length-1] === 'match') history.pop();
-      updateBackBtn();
-      refreshFavorite(state);
-      renderPlans();
+      // 完成：若已选定季节则直接保存并退出；否则先弹出季节选择
+      if (matchState.currentSeason) {
+        if (saveCurrentMatch(matchState.currentSeason)) {
+          clearCanvas();
+          toast('已保存到' + seasonName(matchState.currentSeason) + '季');
+          closeMatch();
+        }
+      } else {
+        const placed = $$('.placed', $('#matchCanvas'));
+        if (!placed.length) { toast('先把衣物拖到上方白底'); return; }
+        $('#seasonPick').hidden = false;
+        pushHistory('season');
+      }
     });
 
     // 分类侧栏
@@ -220,19 +259,19 @@
     $$('#seasonPick .season-pick-grid button').forEach(b => {
       b.addEventListener('click', () => {
         const season = b.dataset.season;
-        const items = $$('.placed', $('#matchCanvas')).map(p => p.dataset.url);
-        state.seasons[season] = state.seasons[season] || [];
-        state.seasons[season].push({ id: 'o' + Date.now(), items });
-        save(state);
-        refreshFavorite(state);
-        $('#seasonPick').hidden = true;
-        if (history[history.length-1] === 'season') history.pop();
-        updateBackBtn();
-        clearCanvas();
-        toast('已保存到' + { spring: '春', summer: '夏', autumn: '秋', winter: '冬' }[season] + '季');
+        matchState.currentSeason = season;   // 记录所选季节，供"完成"键复用
+        if (saveCurrentMatch(season)) {
+          $('#seasonPick').hidden = true;
+          if (history[history.length-1] === 'season') history.pop();
+          updateBackBtn();
+          clearCanvas();
+          toast('已保存到' + seasonName(season) + '季');
+        }
       });
     });
   }
+
+  function seasonName(s) { return { spring: '春', summer: '夏', autumn: '秋', winter: '冬' }[s]; }
 
   function renderCategoryList() {
     const ul = $('#categoryList');
@@ -244,6 +283,8 @@
         matchState.activeCat = li.dataset.key;
         $$('#categoryList li').forEach(x => x.classList.toggle('active', x === li));
         renderTray();
+        $('#categoryPanel').hidden = true;   // 选完分类自动收起侧栏，方便直接拖拽
+        if (history[history.length-1] === 'category') goBack();
       });
     });
   }
@@ -283,11 +324,34 @@
     $('#matchCanvas').innerHTML = '';
   }
 
+  // 当前画布缩放比例（整体缩放，作用于画布内所有衣物）
+  let canvasScale = 1;
+  function applyCanvasScale() {
+    $('#matchCanvas').style.transform = `scale(${canvasScale})`;
+    $('#matchCanvas').style.transformOrigin = 'top left';
+    const label = $('#zoomLabel');
+    if (label) label.textContent = Math.round(canvasScale * 100) + '%';
+  }
+  function setZoom(v) {
+    canvasScale = Math.min(2.5, Math.max(0.4, v));
+    applyCanvasScale();
+  }
+  function resetZoom() { canvasScale = 1; applyCanvasScale(); }
+
+  // 单个衣物缩放（双击画布内衣物放大/缩小，或选中后用滚轮）
+  function scalePlaced(el, factor) {
+    let s = parseFloat(el.dataset.scale || '1');
+    s = Math.min(3, Math.max(0.3, s * factor));
+    el.dataset.scale = s;
+    el.style.width = (90 * s) + 'px';
+  }
+
   function placeOnCanvas(url) {
     const canvas = $('#matchCanvas');
     const el = document.createElement('div');
     el.className = 'placed';
     el.dataset.url = url;
+    el.dataset.scale = '1';
     el.style.left = (20 + Math.random() * 40) + 'px';
     el.style.top = (20 + Math.random() * 40) + 'px';
     el.innerHTML = `<img src="${url}">`;
@@ -297,26 +361,75 @@
 
   function makeDraggable(el, container) {
     let sx, sy, ox, oy, dragging = false;
+    let pinchStart = 0, pinchScale = 1, pinching = false;
+
     const down = (x, y) => {
+      if (pinching) return;
       dragging = true;
       sx = x; sy = y;
       ox = parseFloat(el.style.left) || 0;
       oy = parseFloat(el.style.top) || 0;
       el.style.cursor = 'grabbing';
+      el.classList.add('selected');
+      $$('.placed', container).forEach(p => { if (p !== el) p.classList.remove('selected'); });
     };
     const move = (x, y) => {
-      if (!dragging) return;
+      if (!dragging || pinching) return;
       el.style.left = (ox + x - sx) + 'px';
       el.style.top = (oy + y - sy) + 'px';
     };
     const up = () => { dragging = false; el.style.cursor = 'grab'; };
 
+    // 滚轮缩放选中的衣物（桌面）
+    el.addEventListener('wheel', e => {
+      e.preventDefault();
+      $$('.placed', container).forEach(p => p.classList.remove('selected'));
+      el.classList.add('selected');
+      scalePlaced(el, e.deltaY < 0 ? 1.1 : 0.9);
+    }, { passive: false });
+
     el.addEventListener('mousedown', e => down(e.clientX, e.clientY));
     window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
     window.addEventListener('mouseup', up);
-    el.addEventListener('touchstart', e => down(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
-    el.addEventListener('touchmove', e => move(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
-    el.addEventListener('touchend', up);
+
+    // === 触摸：拖动 + 双指捏合缩放（移动端核心） ===
+    el.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        pinching = true; dragging = false;
+        pinchStart = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        pinchScale = parseFloat(el.dataset.scale || '1');
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        pinching = false;
+        down(e.touches[0].clientX, e.touches[0].clientY);
+        e.preventDefault();   // 阻止页面滚动，保证拖动生效
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchmove', e => {
+      if (e.touches.length === 2 && pinchStart) {
+        const d = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const s = Math.min(3, Math.max(0.3, pinchScale * (d / pinchStart)));
+        el.dataset.scale = s.toFixed(3);
+        el.style.width = (90 * s) + 'px';
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        move(e.touches[0].clientX, e.touches[0].clientY);
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchend', e => {
+      if (e.touches.length === 0) { pinching = false; dragging = false; }
+      up();
+    });
+    el.addEventListener('touchcancel', () => { pinching = false; dragging = false; });
   }
 
   /* ---------- 个人主页：服饰库数量 ---------- */
@@ -341,6 +454,37 @@
     renderWardrobe();
     initUpload();
     initMatch();
+    initSeasonDetail();
+    initZoom();
+  }
+
+  // 季节详情页：返回键 + 渲染
+  function initSeasonDetail() {
+    $('#seasonDetailBack').addEventListener('click', () => {
+      // 返回到穿搭方案页（上一页）
+      $$('.nav-btn').forEach(b => b.classList.toggle('is-active', b.dataset.target === 'page-plans'));
+      $$('.page').forEach(p => p.classList.toggle('is-active', p.id === 'page-plans'));
+      // 清掉 season-detail 历史
+      if (history[history.length-1] === 'season-detail') history.pop();
+      updateBackBtn();
+    });
+  }
+
+  // 画布整体缩放：按钮 + 滚轮
+  function initZoom() {
+    $('#zoomIn').addEventListener('click', () => setZoom(canvasScale + 0.2));
+    $('#zoomOut').addEventListener('click', () => setZoom(canvasScale - 0.2));
+    $('#zoomReset').addEventListener('click', resetZoom);
+    const canvas = $('#matchCanvas');
+    // 在画布空白处滚轮 = 整体缩放
+    canvas.addEventListener('wheel', e => {
+      if (e.target === canvas || e.target.classList.contains('placed') === false) {
+        if (e.target === canvas) {
+          e.preventDefault();
+          setZoom(canvasScale + (e.deltaY < 0 ? 0.1 : -0.1));
+        }
+      }
+    }, { passive: false });
   }
 
   document.addEventListener('DOMContentLoaded', init);
