@@ -2,7 +2,7 @@
 (function (global) {
   'use strict';
 
-  // 11 个服饰分类：图标 + 文字
+  // 服饰分类：图标 + 文字。所有分类上传时都会抠图换白底。
   const CATEGORIES = [
     { key: 'top',      icon: '👚', name: '上衣' },
     { key: 'coat',     icon: '🧥', name: '外套' },
@@ -12,10 +12,15 @@
     { key: 'necklace', icon: '📿', name: '项链' },
     { key: 'earring',  icon: '💎', name: '耳环' },
     { key: 'bracelet', icon: '⌚', name: '手链' },
+    { key: 'bangle',   icon: '📿', name: '手环' },
     { key: 'ring',     icon: '💍', name: '戒指' },
     { key: 'hair',     icon: '🎀', name: '头饰' },
+    { key: 'bag',      icon: '👜', name: '包包' },
     { key: 'other',    icon: '🧷', name: '其他' }
   ];
+
+  // 饰品分类（上传时统一扣图换白底）：项链/戒指/手链/手环/腰带/头饰/包包
+  const ACCESSORY_KEYS = ['necklace', 'ring', 'bracelet', 'bangle', 'belt', 'hair', 'bag'];
 
   const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 
@@ -57,7 +62,7 @@
   }
 
   global.OSData = {
-    CATEGORIES, SEASONS, LS_KEY,
+    CATEGORIES, SEASONS, ACCESSORY_KEYS, LS_KEY,
     load, save, defaultState, refreshFavorite
   };
 })(window);

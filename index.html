@@ -9,6 +9,7 @@
 <body>
   <!-- 顶部标题栏 -->
   <header class="app-header">
+    <button class="app-back" id="appBack" hidden>←</button>
     <h1 class="app-title">穿搭工作台</h1>
     <span class="app-sub">Outfit Studio</span>
   </header>
@@ -81,6 +82,7 @@
   <div class="modal" id="uploadModal" hidden>
     <div class="modal-sheet">
       <div class="modal-head">
+        <button class="modal-back" id="uploadBack">←</button>
         <span>上传衣物</span>
         <button class="modal-close" data-close="uploadModal">✕</button>
       </div>
@@ -107,7 +109,7 @@
     <!-- 完成键 -->
     <button class="match-done" id="matchDone">完成</button>
 
-    <div class="match-head">搭配衣物</div>
+    <div class="match-head">搭配衣物 <button class="match-back" id="matchBack">← 返回</button></div>
 
     <!-- 上三分之一：白底画布 -->
     <div class="match-canvas-wrap">

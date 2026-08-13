@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "netlify-cli": "^27.1.1",
+    "playwright-core": "^1.62.1"
+  }
+}

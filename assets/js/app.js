@@ -2,11 +2,19 @@
 (function () {
   'use strict';
 
-  const { CATEGORIES, SEASONS, load, save, refreshFavorite } = window.OSData;
+  const { CATEGORIES, SEASONS, ACCESSORY_KEYS, load, save, refreshFavorite } = window.OSData;
   let state = load();
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+  // 页面历史栈：用于"返回键"返回上一个页面
+  const history = [];
+  function pushHistory(view) { history.push(view); updateBackBtn(); }
+  function updateBackBtn() {
+    const btn = $('#appBack');
+    if (btn) btn.hidden = history.length === 0;
+  }
 
   function toast(msg) {
     let t = $('.toast');
@@ -18,14 +26,38 @@
   }
 
   /* ---------- 底部导航 ---------- */
+  function showPage(target) {
+    $$('.nav-btn').forEach(b => b.classList.toggle('is-active', b.dataset.target === target));
+    $$('.page').forEach(p => p.classList.toggle('is-active', p.id === target));
+  }
   function initNav() {
     $$('.nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const target = btn.dataset.target;
-        $$('.nav-btn').forEach(b => b.classList.toggle('is-active', b === btn));
-        $$('.page').forEach(p => p.classList.toggle('is-active', p.id === target));
+        showPage(btn.dataset.target);
+        // 底部导航视为"主页"，清空历史栈（主页之间不算返回层级）
+        history.length = 0;
+        updateBackBtn();
       });
     });
+    // 顶部返回键：返回上一个视图
+    $('#appBack').addEventListener('click', goBack);
+  }
+
+  // 统一返回：按历史栈逐层退出
+  function goBack() {
+    const last = history.pop();
+    if (!last) { updateBackBtn(); return; }
+    if (last === 'upload') { $('#uploadModal').hidden = true; }
+    else if (last === 'match') {
+      $('#matchView').hidden = true;
+      $('#categoryPanel').hidden = true;
+      $('#seasonPick').hidden = true;
+      refreshFavorite(state);
+      renderPlans();
+    }
+    else if (last === 'season') { $('#seasonPick').hidden = true; }
+    else if (last === 'category') { $('#categoryPanel').hidden = true; }
+    updateBackBtn();
   }
 
   /* ---------- 穿搭方案页 ---------- */
@@ -80,8 +112,9 @@
     // 填充分类
     catSel.innerHTML = CATEGORIES.map(c => `<option value="${c.key}">${c.icon} ${c.name}</option>`).join('');
 
-    $('#openUpload').addEventListener('click', () => { modal.hidden = false; });
-    $('[data-close="uploadModal"]').addEventListener('click', () => { modal.hidden = true; });
+    $('#openUpload').addEventListener('click', () => { modal.hidden = false; pushHistory('upload'); });
+    $('[data-close="uploadModal"]').addEventListener('click', () => { modal.hidden = true; if (history[history.length-1]==='upload') goBack(); });
+    $('#uploadBack').addEventListener('click', () => { modal.hidden = true; if (history[history.length-1]==='upload') goBack(); });
 
     let currentDataUrl = null;
     input.addEventListener('change', e => {
@@ -155,24 +188,34 @@
       renderCategoryList();
       renderTray();
       clearCanvas();
+      pushHistory('match');
     });
+    // 返回键：退出搭配页
+    $('#matchBack').addEventListener('click', () => { if (history[history.length-1]==='match') goBack(); });
     $('#matchDone').addEventListener('click', () => {
       view.hidden = true;
+      $('#categoryPanel').hidden = true;
+      $('#seasonPick').hidden = true;
+      // 清掉 match 及其子层历史
+      while (history.length && history[history.length-1] !== 'match') history.pop();
+      if (history[history.length-1] === 'match') history.pop();
+      updateBackBtn();
       refreshFavorite(state);
       renderPlans();
     });
 
     // 分类侧栏
-    $('#openCategory').addEventListener('click', () => { $('#categoryPanel').hidden = false; });
-    $('#closeCategory').addEventListener('click', () => { $('#categoryPanel').hidden = true; });
+    $('#openCategory').addEventListener('click', () => { $('#categoryPanel').hidden = false; pushHistory('category'); });
+    $('#closeCategory').addEventListener('click', () => { $('#categoryPanel').hidden = true; if (history[history.length-1]==='category') goBack(); });
 
     // 添加键 -> 选季节
     $('#matchAdd').addEventListener('click', () => {
       const placed = $$('.placed', $('#matchCanvas'));
       if (!placed.length) { toast('先把衣物拖到上方白底'); return; }
       $('#seasonPick').hidden = false;
+      pushHistory('season');
     });
-    $('#seasonPickCancel').addEventListener('click', () => { $('#seasonPick').hidden = true; });
+    $('#seasonPickCancel').addEventListener('click', () => { $('#seasonPick').hidden = true; if (history[history.length-1]==='season') goBack(); });
     $$('#seasonPick .season-pick-grid button').forEach(b => {
       b.addEventListener('click', () => {
         const season = b.dataset.season;
@@ -182,6 +225,8 @@
         save(state);
         refreshFavorite(state);
         $('#seasonPick').hidden = true;
+        if (history[history.length-1] === 'season') history.pop();
+        updateBackBtn();
         clearCanvas();
         toast('已保存到' + { spring: '春', summer: '夏', autumn: '秋', winter: '冬' }[season] + '季');
       });
