@@ -1,8 +1,13 @@
-/* ===== 穿搭工作台 - 数据层 ===== */
+/* ===== 穿搭工作台 - 数据层 =====
+ * 持久化策略（按可靠性排序，自动降级）：
+ *   1. IndexedDB  —— 所有现代移动端浏览器均支持，且不受"禁用本地存储"限制，刷新后保留
+ *   2. localStorage —— 兜底
+ *   3. 内存       —— 仅当前会话（极端情况下）
+ * 对外仍是同步 API：load() 返回当前内存 state，save() 同步落内存并异步持久化。
+ */
 (function (global) {
   'use strict';
 
-  // 服饰分类：图标 + 文字。
   const CATEGORIES = [
     { key: 'top',      icon: '👚', name: '上衣' },
     { key: 'coat',     icon: '🧥', name: '外套' },
@@ -18,107 +23,111 @@
     { key: 'bag',      icon: '👜', name: '包包' },
     { key: 'other',    icon: '🧷', name: '其他' }
   ];
-
   const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
-
-  // 采用「多 key 分片存储」：每个季节、服饰库、常用各自一个 key。
-  // 避免单次写入超大 JSON 被部分移动端浏览器（隐私模式/存储限制）静默拒绝。
-  const PREFIX = 'outfit_studio_v1_';
-  const K = {
-    clothes:  PREFIX + 'clothes',
-    seasons:  PREFIX + 'seasons',
-    favorite: PREFIX + 'favorite'
-  };
-  const LEGACY_KEY = 'outfit_studio_v1'; // 兼容旧版单一 key 的数据迁移
-
-  // 选择一个可靠的存储后端；Safari 隐私模式下 localStorage 写入会抛错，降级到 memory。
-  function getStore() {
-    try {
-      const t = '__t__';
-      localStorage.setItem(t, '1'); localStorage.removeItem(t);
-      return localStorage;
-    } catch (e) {
-      try {
-        const t = '__t__';
-        sessionStorage.setItem(t, '1'); sessionStorage.removeItem(t);
-        return sessionStorage;
-      } catch (e2) {
-        return null; // 完全不可用，退回内存兜底
-      }
-    }
-  }
-  let store = getStore();
-  const memoryFallback = {}; // 最差情况下的内存兜底（仅当前会话有效）
+  const DB_NAME = 'outfit_studio';
+  const STORE = 'state';
+  const LS_KEY = 'outfit_studio_v1';
 
   function defaultState() {
     return {
-      clothes: {},                 // key=分类key -> [{id, name, dataUrl}]
-      seasons: { spring: [], summer: [], autumn: [], winter: [] }, // 每季穿搭 [{id, items:[dataUrl...]}]
-      favorite: []                 // 最常穿（每周更新）
+      clothes: {},
+      seasons: { spring: [], summer: [], autumn: [], winter: [] },
+      favorite: []
     };
   }
 
-  // 通用：分片读写，带验证回读
-  function writePart(key, value) {
-    const str = JSON.stringify(value);
-    if (store) {
+  // 内存中的最新状态（同步可读）
+  let mem = defaultState();
+  let db = null;
+
+  /* ---------- IndexedDB ---------- */
+  function openDB() {
+    return new Promise((resolve) => {
+      if (!('indexedDB' in global)) return resolve(null);
+      let req;
+      try { req = indexedDB.open(DB_NAME, 1); }
+      catch (e) { return resolve(null); }
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    });
+  }
+  function idbGet(key) {
+    return new Promise((resolve) => {
+      if (!db) return resolve(null);
       try {
-        store.setItem(key, str);
-        // 回读验证，确认确实落盘
-        if (store.getItem(key) !== str) throw new Error('verify failed');
-        return true;
-      } catch (e) { /* 落到内存兜底 */ }
-    }
-    memoryFallback[key] = str;
-    return true;
+        const tx = db.transaction(STORE, 'readonly');
+        const r = tx.objectStore(STORE).get(key);
+        r.onsuccess = () => resolve(r.result ?? null);
+        r.onerror = () => resolve(null);
+      } catch (e) { resolve(null); }
+    });
   }
-  function readPart(key, fallback) {
-    let raw = null;
-    if (store) { try { raw = store.getItem(key); } catch (e) {} }
-    if (raw == null && memoryFallback[key] != null) raw = memoryFallback[key];
-    if (raw == null) return fallback;
-    try { return JSON.parse(raw); } catch (e) { return fallback; }
-  }
-
-  function load() {
-    const def = defaultState();
-    let clothes  = readPart(K.clothes, null);
-    let seasons  = readPart(K.seasons, null);
-    let favorite = readPart(K.favorite, null);
-
-    // 兼容旧版：若分片为空但旧单一 key 有数据，则迁移过来
-    if ((!clothes || !seasons) && store) {
+  function idbSet(key, value) {
+    return new Promise((resolve) => {
+      if (!db) return resolve(false);
       try {
-        const legacy = localStorage.getItem(LEGACY_KEY);
-        if (legacy) {
-          const obj = JSON.parse(legacy);
-          clothes  = clothes  || obj.clothes  || def.clothes;
-          seasons  = seasons  || obj.seasons  || def.seasons;
-          favorite = favorite || obj.favorite || def.favorite;
-          // 写回分片，并删除旧 key
-          writePart(K.clothes, clothes);
-          writePart(K.seasons, seasons);
-          writePart(K.favorite, favorite);
-          try { localStorage.removeItem(LEGACY_KEY); } catch (e) {}
-        }
-      } catch (e) {}
-    }
-
-    return {
-      clothes:  Object.assign(def.clothes, clothes || def.clothes),
-      seasons:  Object.assign(def.seasons, seasons || def.seasons),
-      favorite: Array.isArray(favorite) ? favorite : def.favorite
-    };
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(value, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) { resolve(false); }
+    });
   }
 
-  // 保存整份状态（分片写入）
+  /* ---------- localStorage 兜底（不依赖"本地存储"开关的普通写入） ---------- */
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+
+  /* ---------- 持久化：IndexedDB 优先，localStorage 兜底 ---------- */
+  function persist() {
+    const str = JSON.stringify(mem);
+    // 异步写 IndexedDB（主）
+    idbSet(LS_KEY, str);
+    // 同步写 localStorage（兜底）
+    lsSet(LS_KEY, str);
+  }
+
+  function load() { return mem; }
+
   function save(state) {
-    writePart(K.clothes, state.clothes || {});
-    writePart(K.seasons, state.seasons || {});
-    writePart(K.favorite, state.favorite || []);
+    mem = state;
+    persist();
   }
 
-  // 每周更新：把使用频率最高的若干件衣服组合成"最常穿"
+  // 把已加载的持久化数据合并进内存
+  function mergeFrom(raw) {
+    if (!raw) return;
+    try {
+      const obj = JSON.parse(raw);
+      const def = defaultState();
+      mem = {
+        clothes:  Object.assign(def.clothes, obj.clothes || {}),
+        seasons:  Object.assign(def.seasons, obj.seasons || {}),
+        favorite: Array.isArray(obj.favorite) ? obj.favorite : def.favorite
+      };
+    } catch (e) {}
+  }
+
+  /* ---------- 初始化：异步预热 IndexedDB + 兼容旧 localStorage ---------- */
+  function init(onReady) {
+    openDB().then(async (database) => {
+      db = database;
+      // 优先读 IndexedDB
+      let raw = await idbGet(LS_KEY);
+      // 兼容旧版：IndexedDB 为空时读旧 localStorage
+      if (raw == null) {
+        raw = lsGet(LS_KEY);
+        if (raw != null && db) { await idbSet(LS_KEY, raw); } // 迁移到 IDB
+      }
+      mergeFrom(raw);
+      if (onReady) onReady(mem);
+    });
+  }
+
+  // 每周更新：把衣物组合成"最常穿"
   function refreshFavorite(state) {
     const all = [];
     Object.keys(state.clothes).forEach(k => {
@@ -128,20 +137,8 @@
     save(state);
   }
 
-  // 验证持久化是否真的可用：写一个探针并立即回读
-  function persistAvailable() {
-    if (!store) return false;
-    try {
-      const probe = PREFIX + '_probe';
-      store.setItem(probe, '1');
-      const ok = store.getItem(probe) === '1';
-      store.removeItem(probe);
-      return ok;
-    } catch (e) { return false; }
-  }
-
   global.OSData = {
     CATEGORIES, SEASONS,
-    load, save, defaultState, refreshFavorite, persistAvailable
+    init, load, save, defaultState, refreshFavorite
   };
 })(window);

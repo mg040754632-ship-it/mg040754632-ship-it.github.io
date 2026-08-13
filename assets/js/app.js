@@ -2,8 +2,8 @@
 (function () {
   'use strict';
 
-  const { CATEGORIES, SEASONS, load, save, refreshFavorite, persistAvailable } = window.OSData;
-  let state = load();
+  const { CATEGORIES, SEASONS, load, save, refreshFavorite, init: osInit } = window.OSData;
+  let state = load();   // 先用默认 state；OSData.init 预热完成后会用持久化数据替换并重新渲染
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -189,29 +189,14 @@
   /* ---------- 搭配衣物 ---------- */
   let matchState = { activeCat: null, currentSeason: null };
 
-  // 把当前画布上的搭配保存到指定季节（持久化到 localStorage）
+  // 把当前画布上的搭配保存到指定季节（持久化到 IndexedDB / localStorage）
   function saveCurrentMatch(season) {
     const items = $$('.placed', $('#matchCanvas')).map(p => p.dataset.url);
     if (!items.length) { toast('先把衣物拖到上方白底'); return false; }
     state.seasons[season] = state.seasons[season] || [];
     state.seasons[season].push({ id: 'o' + Date.now(), items });
-    save(state);                       // 写入 localStorage，刷新/重进不丢失
-
-    // 回读验证：确认数据确实落盘（移动端隐私模式/存储限制会静默失败）
-    const saved = (() => {
-      try {
-        const raw = localStorage.getItem('outfit_studio_v1_seasons') || sessionStorage.getItem('outfit_studio_v1_seasons');
-        if (!raw) return false;
-        const obj = JSON.parse(raw);
-        return (obj[season] || []).length > 0;
-      } catch (e) { return false; }
-    })();
-    if (!persistAvailable() || !saved) {
-      toast('⚠️ 保存失败：浏览器禁用了本地存储\n请关闭无痕/隐私模式后重试');
-      // 仍把这条加进内存里的 state，本次会话可见，但刷新会丢
-    } else {
-      toast('已保存到' + seasonName(season) + '季 ✓');
-    }
+    save(state);                       // 同步更新内存 + 异步持久化（IndexedDB 优先）
+    toast('已保存到' + seasonName(season) + '季 ✓');
     refreshFavorite(state);
     renderSeasonDetail(season);        // 同步刷新季节详情页
     return true;
@@ -470,6 +455,13 @@
     initMatch();
     initSeasonDetail();
     initZoom();
+
+    // 异步预热持久化数据（IndexedDB / 旧 localStorage 迁移），完成后用真实数据重渲染
+    osInit((realState) => {
+      state = realState;
+      renderPlans();
+      renderWardrobe();
+    });
   }
 
   // 季节详情页：返回键 + 渲染
