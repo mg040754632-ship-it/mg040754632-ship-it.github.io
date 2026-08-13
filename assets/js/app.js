@@ -143,6 +143,7 @@
       });
       save(state);
       refreshFavorite(state);
+      renderWardrobe();
       toast('已加入服饰库');
       modal.hidden = true;
       preview.innerHTML = '<span class="upload-hint">点击从相册选择图片</span>';
@@ -269,6 +270,7 @@
         state.clothes[matchState.activeCat] = state.clothes[matchState.activeCat].filter(x => x.id !== c.id);
         save(state);
         renderTray();
+        renderWardrobe();
         toast('已删除');
       });
       // 点击/拖拽到画布
@@ -317,11 +319,26 @@
     el.addEventListener('touchend', up);
   }
 
+  /* ---------- 个人主页：服饰库数量 ---------- */
+  function renderWardrobe() {
+    const grid = $('#wardrobeGrid');
+    if (!grid) return;
+    grid.innerHTML = CATEGORIES.map(c => {
+      const n = (state.clothes[c.key] || []).length;
+      return `<div class="wardrobe-cell${n ? '' : ' empty'}">
+        <span class="w-icon">${c.icon}</span>
+        <span class="w-name">${c.name}</span>
+        <span class="w-count">${n}</span>
+      </div>`;
+    }).join('');
+  }
+
   /* ---------- 启动 ---------- */
   function init() {
     refreshFavorite(state);
     initNav();
     renderPlans();
+    renderWardrobe();
     initUpload();
     initMatch();
   }

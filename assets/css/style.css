@@ -129,6 +129,30 @@ html, body {
 .profile-card-title { font-size: 18px; font-weight: 700; }
 .profile-card-desc { font-size: 13px; color: var(--ink-soft); }
 
+/* 服饰库数量网格 */
+.wardrobe-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.wardrobe-cell {
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.wardrobe-cell .w-icon { font-size: 24px; }
+.wardrobe-cell .w-name { font-size: 12px; color: var(--ink); }
+.wardrobe-cell .w-count {
+  font-size: 12px; font-weight: 700; color: var(--accent);
+  background: var(--accent-soft); border-radius: 10px; padding: 1px 8px; min-width: 22px; text-align: center;
+}
+.wardrobe-cell.empty .w-count { color: var(--ink-soft); background: var(--surface-2); }
+
 /* ---------- 底部导航 ---------- */
 .bottom-nav {
   position: fixed;
