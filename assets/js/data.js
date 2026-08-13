@@ -133,7 +133,7 @@
     Object.keys(state.clothes).forEach(k => {
       (state.clothes[k] || []).forEach(c => all.push(c));
     });
-    state.favorite = all.slice(0, 6);
+    state.favorite = all.slice(0, 5);
     save(state);
   }
 
