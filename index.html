@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>穿搭工作台</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <!-- 顶部标题栏 -->
+  <header class="app-header">
+    <h1 class="app-title">穿搭工作台</h1>
+    <span class="app-sub">Outfit Studio</span>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="app-main">
+
+    <!-- ========== 穿搭方案页 ========== -->
+    <section id="page-plans" class="page is-active">
+      <div class="section-label">最常穿的穿搭 · 每周更新</div>
+      <div class="feature-card" id="favoriteOutfit">
+        <!-- 由 JS 渲染最常穿搭 -->
+      </div>
+
+      <div class="section-label">四季穿搭</div>
+      <div class="season-grid">
+        <button class="season-square" data-season="spring">
+          <span class="season-emoji">🌸</span>
+          <span class="season-name">春</span>
+        </button>
+        <button class="season-square" data-season="summer">
+          <span class="season-emoji">☀️</span>
+          <span class="season-name">夏</span>
+        </button>
+        <button class="season-square" data-season="autumn">
+          <span class="season-emoji">🍂</span>
+          <span class="season-name">秋</span>
+        </button>
+        <button class="season-square" data-season="winter">
+          <span class="season-emoji">❄️</span>
+          <span class="season-name">冬</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ========== 个人主页 ========== -->
+    <section id="page-profile" class="page">
+      <div class="profile-grid">
+        <!-- 上传衣物 -->
+        <button class="profile-card" id="openUpload">
+          <div class="profile-card-icon">⬆️</div>
+          <div class="profile-card-title">上传衣物</div>
+          <div class="profile-card-desc">从相册选图，抠衣换白底，归入分类</div>
+        </button>
+
+        <!-- 搭配衣物 -->
+        <button class="profile-card" id="openMatch">
+          <div class="profile-card-icon">🎨</div>
+          <div class="profile-card-title">搭配衣物</div>
+          <div class="profile-card-desc">拖拽组合，创造专属穿搭</div>
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========== 底部导航 ========== -->
+  <nav class="bottom-nav">
+    <button class="nav-btn is-active" data-target="page-plans">
+      <span class="nav-icon">👗</span>
+      <span class="nav-text">穿搭方案</span>
+    </button>
+    <button class="nav-btn" data-target="page-profile">
+      <span class="nav-icon">🙍</span>
+      <span class="nav-text">个人主页</span>
+    </button>
+  </nav>
+
+  <!-- ========== 上传衣物 弹层 ========== -->
+  <div class="modal" id="uploadModal" hidden>
+    <div class="modal-sheet">
+      <div class="modal-head">
+        <span>上传衣物</span>
+        <button class="modal-close" data-close="uploadModal">✕</button>
+      </div>
+      <div class="upload-body">
+        <label class="upload-drop">
+          <input type="file" id="uploadInput" accept="image/*" hidden />
+          <span id="uploadPreviewWrap" class="upload-preview">
+            <span class="upload-hint">点击从相册选择图片</span>
+          </span>
+        </label>
+        <div class="form-row">
+          <label>归入分类</label>
+          <select id="uploadCategory"></select>
+        </div>
+        <button class="primary-btn" id="saveUpload">加入服饰库</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 搭配衣物 全屏页 ========== -->
+  <div class="match-view" id="matchView" hidden>
+    <!-- 左上角小圆 -->
+    <button class="match-dot" id="openCategory" title="服饰分类">☰</button>
+    <!-- 完成键 -->
+    <button class="match-done" id="matchDone">完成</button>
+
+    <div class="match-head">搭配衣物</div>
+
+    <!-- 上三分之一：白底画布 -->
+    <div class="match-canvas-wrap">
+      <div class="match-canvas" id="matchCanvas"></div>
+    </div>
+
+    <!-- 下三分之二：可拖动的衣物 -->
+    <div class="match-tray" id="matchTray"></div>
+
+    <!-- 添加键 -->
+    <button class="match-add" id="matchAdd">添加 ⬇</button>
+
+    <!-- 选择季节弹层 -->
+    <div class="season-pick" id="seasonPick" hidden>
+      <div class="season-pick-title">保存到哪个季节？</div>
+      <div class="season-pick-grid">
+        <button data-season="spring">🌸 春</button>
+        <button data-season="summer">☀️ 夏</button>
+        <button data-season="autumn">🍂 秋</button>
+        <button data-season="winter">❄️ 冬</button>
+      </div>
+      <button class="ghost-btn" id="seasonPickCancel">取消</button>
+    </div>
+
+    <!-- 服饰分类侧栏（不盖满） -->
+    <aside class="category-panel" id="categoryPanel" hidden>
+      <div class="category-panel-head">
+        <span>服饰分类</span>
+        <button class="modal-close" id="closeCategory">✕</button>
+      </div>
+      <ul class="category-list" id="categoryList"></ul>
+    </aside>
+  </div>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
