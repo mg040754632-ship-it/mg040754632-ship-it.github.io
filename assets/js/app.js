@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const { CATEGORIES, SEASONS, load, save, refreshFavorite } = window.OSData;
+  const { CATEGORIES, SEASONS, load, save, refreshFavorite, persistAvailable } = window.OSData;
   let state = load();
 
   const $ = (s, r = document) => r.querySelector(s);
@@ -196,6 +196,22 @@
     state.seasons[season] = state.seasons[season] || [];
     state.seasons[season].push({ id: 'o' + Date.now(), items });
     save(state);                       // 写入 localStorage，刷新/重进不丢失
+
+    // 回读验证：确认数据确实落盘（移动端隐私模式/存储限制会静默失败）
+    const saved = (() => {
+      try {
+        const raw = localStorage.getItem('outfit_studio_v1_seasons') || sessionStorage.getItem('outfit_studio_v1_seasons');
+        if (!raw) return false;
+        const obj = JSON.parse(raw);
+        return (obj[season] || []).length > 0;
+      } catch (e) { return false; }
+    })();
+    if (!persistAvailable() || !saved) {
+      toast('⚠️ 保存失败：浏览器禁用了本地存储\n请关闭无痕/隐私模式后重试');
+      // 仍把这条加进内存里的 state，本次会话可见，但刷新会丢
+    } else {
+      toast('已保存到' + seasonName(season) + '季 ✓');
+    }
     refreshFavorite(state);
     renderSeasonDetail(season);        // 同步刷新季节详情页
     return true;
@@ -233,7 +249,6 @@
       if (matchState.currentSeason) {
         if (saveCurrentMatch(matchState.currentSeason)) {
           clearCanvas();
-          toast('已保存到' + seasonName(matchState.currentSeason) + '季');
           closeMatch();
         }
       } else {
@@ -265,7 +280,6 @@
           if (history[history.length-1] === 'season') history.pop();
           updateBackBtn();
           clearCanvas();
-          toast('已保存到' + seasonName(season) + '季');
         }
       });
     });
